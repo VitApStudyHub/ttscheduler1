@@ -15,64 +15,26 @@ from google.auth.transport.requests import Request
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 REDIRECT_URI = "https://vitaptimetablescheduler.streamlit.app"
 
+# Example placeholders
 theory_mapping = {
-    # ...
+    # fill out your theory mapping
 }
 lab_mapping = {
-    # ...
+    # fill out your lab mapping
 }
 weekday_map = {
     "MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6
 }
 
 ##########################
-# 2) Query Param Helpers
-##########################
-def get_query_params():
-    """Safely get query params (supports older Streamlit versions)."""
-    try:
-        return st.query_params
-    except AttributeError:
-        return st.experimental_get_query_params()
-
-def set_query_params(**params):
-    """Safely set query params (supports older Streamlit versions)."""
-    try:
-        st.set_query_params(**params)
-    except AttributeError:
-        st.experimental_set_query_params(**params)
-
-def get_current_step():
-    """Return the current step from ?step=..., default=1 if missing or invalid."""
-    query = get_query_params()
-    step_str = query.get("step", ["1"])[0]  # e.g. '1'
-    try:
-        step = int(step_str)
-    except ValueError:
-        step = 1
-    return step
-
-def go_to_step(step_number):
-    """
-    Helper to navigate to a given step by setting ?step=step_number
-    and stopping execution so the user sees the new step immediately.
-    """
-    set_query_params(step=str(step_number))
-    st.stop()
-
-##########################
-# 3) Google Auth Flow
+# 2) Google Auth
 ##########################
 def get_google_calendar_service():
     """
-    Web-based OAuth flow:
-      - If we have valid creds in st.session_state, use them.
-      - Else if ?code=... in the URL, fetch_token and store creds.
-      - Otherwise, return None => not signed in.
-
-    Also uses the 'state' param to recover the step user was on.
+    Check for ?code=... from Google sign-in. If found, fetch_token and store credentials in session.
+    If we already have valid creds in session, return a service. Otherwise, return None.
     """
-    # 1) If we already have a stored token
+    # If we already have a token in session, try using it
     if "google_token" in st.session_state:
         creds = pickle.loads(st.session_state["google_token"])
         if creds.expired and creds.refresh_token:
@@ -86,7 +48,7 @@ def get_google_calendar_service():
         if creds and creds.valid:
             return build("calendar", "v3", credentials=creds)
 
-    # 2) If no local creds, see if user returned with ?code=... from Google
+    # Otherwise, see if user just returned with ?code=...
     if not os.path.exists("credentials.json"):
         st.error("Missing credentials.json in the same directory.")
         return None
@@ -97,35 +59,28 @@ def get_google_calendar_service():
         redirect_uri=REDIRECT_URI
     )
 
-    query = get_query_params()
-    code = query.get("code", [None])[0]
-    state = query.get("state", [None])[0]  # The step we stored
+    # Check if user came back with code=...
+    # If so, exchange for credentials
+    query_params = st.experimental_get_query_params()
+    code = query_params.get("code", [None])[0]
     if code:
         try:
-            # Attempt to exchange the auth code for credentials
             flow.fetch_token(code=code)
             creds = flow.credentials
             st.session_state["google_token"] = pickle.dumps(creds)
-
-            # Restore the step from 'state' if present
-            if state and state.isdigit():
-                set_query_params(step=state)
-            else:
-                # fallback to step 5 if no state was found
-                set_query_params(step="5")
-
             st.success("Google authentication successful! You may close the sign-in tab.")
             return build("calendar", "v3", credentials=creds)
         except Exception as e:
             st.error(f"Error fetching token: {e}")
             return None
 
-    return None  # Not authenticated yet
+    # Not authenticated yet
+    return None
 
 def open_auth_url_in_new_tab():
     """
-    Generate the Google OAuth URL, passing 'state' as the current step,
-    open in a new tab, and return the link for manual fallback.
+    Generate the Google OAuth URL (no 'state' param).
+    Attempt to open it in a new tab. Also return the link for manual fallback.
     """
     if not os.path.exists("credentials.json"):
         st.error("Missing credentials.json!")
@@ -136,16 +91,13 @@ def open_auth_url_in_new_tab():
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI
     )
-
-    current_step = get_current_step()
-    # Removed include_granted_scopes to avoid "invalid parameter" errors
+    # 'include_granted_scopes' removed to avoid "invalid parameter" errors
     auth_url, _ = flow.authorization_url(
         prompt="consent",
-        access_type="offline",
-        state=str(current_step)  # store the current step in 'state'
+        access_type="offline"
     )
 
-    # Attempt auto-open
+    # Attempt auto-open in new tab
     open_script = f"""
     <script>
         window.open("{auth_url}", "_blank");
@@ -155,7 +107,7 @@ def open_auth_url_in_new_tab():
     return auth_url
 
 ##########################
-# 4) Timetable Helpers
+# 3) Timetable Helpers
 ##########################
 def extract_course_details(text):
     """
@@ -197,7 +149,7 @@ def get_first_date_on_or_after(start_date, target_weekday):
     return start_date + timedelta(days=days_ahead)
 
 ##########################
-# 5) Calendar Creation
+# 4) Calendar Creation
 ##########################
 def get_or_create_calendar(service, calendar_name, timezone="Asia/Kolkata"):
     if not service:
@@ -219,7 +171,7 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
     reminders = {"useDefault": False, "overrides": overrides}
 
     total_rows = len(df)
-    prog = st.progress(0)
+    progress_bar = st.progress(0)
     success = True
 
     for idx, row in df.iterrows():
@@ -297,25 +249,45 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
             st.error(f"Error creating event for {course}: {str(e)}")
             success = False
 
-        prog.progress(int(((idx + 1) / total_rows) * 100))
+        progress_val = int(((idx + 1) / total_rows) * 100)
+        progress_bar.progress(min(progress_val, 100))
 
-    prog.progress(100)
+    progress_bar.progress(100)
     return success
 
 ##########################
-# 6) The Multi-Step UI
+# 5) Multi-Step UI (session-based)
 ##########################
 def main():
     st.title("Get Notifications on Google Calendar!!!")
 
-    step = get_current_step()
+    # Initialize step
+    if "step" not in st.session_state:
+        st.session_state["step"] = 1
 
-    # Step 1
-    if step == 1:
-        st.header("Step 1: Upload Timetable")
-        method = st.radio("Input Method", ["Upload CSV", "Paste Timetable Text"])
+    # ============= STEP 1: Google Auth + Timetable Input =============
+    if st.session_state["step"] == 1:
+        st.header("Step 1: Authorize and Upload/Paste Timetable")
 
-        if method == "Upload CSV":
+        # Attempt to get a service if user has code=... or stored token
+        service = get_google_calendar_service()
+        if service:
+            st.success("You are already authenticated with Google Calendar!")
+        else:
+            st.warning("Not authenticated. Please sign in first (opens in new tab).")
+            if st.button("Sign in with Google"):
+                auth_url = open_auth_url_in_new_tab()
+                if auth_url:
+                    st.write(
+                        "**If the new tab did not open automatically,** "
+                        f"[click here to sign in manually]({auth_url})"
+                    )
+
+        st.write("---")
+        st.subheader("Upload or Paste Timetable")
+
+        input_method = st.radio("Input Method", ["Upload CSV", "Paste Timetable Text"])
+        if input_method == "Upload CSV":
             csv_file = st.file_uploader("Upload CSV", type=["csv"])
             if csv_file:
                 df = pd.read_csv(csv_file, skipinitialspace=True)
@@ -326,7 +298,6 @@ def main():
         else:
             text = st.text_area("Paste your timetable text below:", height=300)
             if text:
-                # Example parse
                 try:
                     courses = extract_course_details(text)
                     if courses:
@@ -340,27 +311,40 @@ def main():
                 except Exception as e:
                     st.error(f"Error parsing: {e}")
 
-        if st.button("Next"):
+        if st.button("Next -> Step 2"):
+            # Check if user is authenticated
+            if "google_token" not in st.session_state:
+                st.error("Please sign in with Google first!")
+                st.stop()
+            # Check if user has provided timetable data
             if "df" not in st.session_state:
-                st.error("Please provide timetable data first!")
-            else:
-                go_to_step(2)
+                st.error("Please upload or paste timetable data first!")
+                st.stop()
+            st.session_state["step"] = 2
+            st.stop()
 
-    elif step == 2:
+    # ============= STEP 2: Semester Start Date =============
+    elif st.session_state["step"] == 2:
         st.header("Step 2: Select Semester Start Date")
         date_val = st.date_input("Semester Start Date", value=datetime.now().date())
         st.session_state["semester_start"] = date_val
-        if st.button("Next"):
-            go_to_step(3)
 
-    elif step == 3:
+        if st.button("Next -> Step 3"):
+            st.session_state["step"] = 3
+        st.stop()
+
+    # ============= STEP 3: Timezone =============
+    elif st.session_state["step"] == 3:
         st.header("Step 3: Select Timezone")
         tz = st.selectbox("Choose Timezone", ["Asia/Kolkata", "UTC"])
         st.session_state["timezone"] = tz
-        if st.button("Next"):
-            go_to_step(4)
 
-    elif step == 4:
+        if st.button("Next -> Step 4"):
+            st.session_state["step"] = 4
+        st.stop()
+
+    # ============= STEP 4: Notifications =============
+    elif st.session_state["step"] == 4:
         st.header("Step 4: Notifications (minutes before event)")
         with st.form("notif_form"):
             ntimes = []
@@ -374,15 +358,18 @@ def main():
                 if m > 0:
                     ntimes.append(m)
 
-            submitted = st.form_submit_button("Next")
+            submitted = st.form_submit_button("Next -> Step 5")
             if submitted:
                 st.session_state["notification_times"] = ntimes
-                go_to_step(5)
+                st.session_state["step"] = 5
+        st.stop()
 
-    elif step == 5:
+    # ============= STEP 5: Create Calendar Events =============
+    elif st.session_state["step"] == 5:
         st.header("Step 5: Create Calendar Events")
-        st.write("We'll now authenticate with Google and create events in your calendar.")
+        st.write("Now that you have authorized in Step 1, we can create events in your calendar.")
 
+        # Double-check service
         service = get_google_calendar_service()
         if service:
             st.success("You are authenticated with Google Calendar!")
@@ -409,26 +396,20 @@ def main():
                         )
                         if success:
                             st.success("Calendar events created successfully!")
+                            # Optionally remove token so next time user must re-auth
                             if "google_token" in st.session_state:
                                 del st.session_state["google_token"]
                                 st.info("Token removed. Next time you'll re-auth.")
         else:
-            st.warning("Not authenticated. Please click below to sign in.")
-            if st.button("Sign in with Google in new tab"):
-                auth_url = open_auth_url_in_new_tab()
-                if auth_url:
-                    st.write(
-                        "**If the new tab did not open automatically,** "
-                        f"[click here to sign in manually]({auth_url})"
-                    )
-
-        if st.button("Finish/Reset"):
-            st.session_state.clear()
-            set_query_params(step="1")
+            st.warning("You are not authenticated (maybe you reloaded?). Go back to Step 1 to sign in.")
+        st.stop()
 
     else:
-        st.warning("Invalid step. Redirecting to step 1...")
-        go_to_step(1)
+        # Invalid step => reset
+        st.warning("Invalid step. Resetting to Step 1.")
+        st.session_state["step"] = 1
+        st.stop()
+
 
 if __name__ == "__main__":
     main()
