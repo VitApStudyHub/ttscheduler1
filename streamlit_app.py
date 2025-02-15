@@ -15,7 +15,6 @@ from google.auth.transport.requests import Request
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 REDIRECT_URI = "https://vitaptimetablescheduler.streamlit.app"
 
-# Example placeholders
 theory_mapping = {
     # fill out your theory mapping
 }
@@ -67,7 +66,7 @@ def get_google_calendar_service():
             flow.fetch_token(code=code)
             creds = flow.credentials
             st.session_state["google_token"] = pickle.dumps(creds)
-            # Immediately remove ?code=... from the URL
+            # Remove ?code=... from the URL
             st.experimental_set_query_params()
             st.success("Google authentication successful! You may close the sign-in tab.")
             return build("calendar", "v3", credentials=creds)
@@ -78,10 +77,11 @@ def get_google_calendar_service():
     # Not authenticated yet
     return None
 
+
 def open_auth_url_in_new_tab():
     """
     Generate the Google OAuth URL (no 'state' param).
-    Attempt to open it in a new tab. Also return the link for manual fallback.
+    Attempt to open it in a new tab. Also return a normal HTML link for fallback.
     """
     if not os.path.exists("credentials.json"):
         st.error("Missing credentials.json!")
@@ -92,39 +92,28 @@ def open_auth_url_in_new_tab():
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI
     )
-    # 'include_granted_scopes' removed to avoid "invalid parameter" errors
     auth_url, _ = flow.authorization_url(
         prompt="consent",
         access_type="offline"
     )
 
     # Attempt auto-open in new tab
-    open_script = f"""
+    auto_open_script = f"""
     <script>
         window.open("{auth_url}", "_blank");
     </script>
     """
-    st.markdown(open_script, unsafe_allow_html=True)
+    st.markdown(auto_open_script, unsafe_allow_html=True)
 
-    # Create a custom link that closes the current tab and opens the sign-in in a new tab
-    # (May be blocked by some browsers.)
-    close_and_open = f"""
-    <a href="#"
-       onclick="window.open('{auth_url}','_blank'); window.close(); return false;"
-       style="color: blue; text-decoration: underline;">
-       click here to sign in manually
-    </a>
-    """
-    return close_and_open
+    # Return a normal link to open in a new tab
+    link_html = f'<a href="{auth_url}" target="_blank">click here to sign in manually</a>'
+    return link_html
+
 
 ##########################
 # 3) Timetable Helpers
 ##########################
 def extract_course_details(text):
-    """
-    Example parser for your text-based timetable.
-    Adjust or replace with your actual parse logic.
-    """
     pattern = re.compile(
         r"(\w+\d+ - [\w\s-]+(?:\s+(?:I|II|III|IV|V|VI|VII|VIII|IX|X))?)\s*\(([\w\s]+)\)\s*"
         r"[\d\s.]+\s*-\s*Regular\s*([\w\d]+)\s*([\w\d\+\-]+)\s*-\s*([\w\d-]+)\s*([\w\s.]+)\s*-\s*([\w]+)",
@@ -153,11 +142,13 @@ def extract_course_details(text):
             continue
     return courses
 
+
 def get_first_date_on_or_after(start_date, target_weekday):
     days_ahead = target_weekday - start_date.weekday()
     if days_ahead < 0:
         days_ahead += 7
     return start_date + timedelta(days=days_ahead)
+
 
 ##########################
 # 4) Calendar Creation
@@ -172,6 +163,7 @@ def get_or_create_calendar(service, calendar_name, timezone="Asia/Kolkata"):
     body = {"summary": calendar_name, "timeZone": timezone}
     new_cal = service.calendars().insert(body=body).execute()
     return new_cal.get("id")
+
 
 def create_calendar_events(service, df, semester_start_date, calendar_id,
                            timezone="Asia/Kolkata", notifications=[]):
@@ -202,12 +194,10 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
             is_lab = False
             lab_key = None
 
-            # Check if entire slot_field is in lab_mapping
             if slot_field.upper() in lab_mapping:
                 is_lab = True
                 lab_key = slot_field.upper()
             else:
-                # Otherwise, check each token
                 for tok in slot_tokens:
                     if tok in lab_mapping or tok.startswith("L"):
                         is_lab = True
@@ -217,7 +207,7 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
             if is_lab:
                 mapping = lab_mapping.get(lab_key)
                 if not mapping:
-                    st.warning(f"Lab slot '{lab_key}' not found in mapping. Skipping row {idx}.")
+                    st.warning(f"Lab slot '{lab_key}' not found. Skipping row {idx}.")
                     continue
                 for day_code, start_str, end_str in mapping:
                     sh, sm = map(int, start_str.split(":"))
@@ -268,6 +258,7 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
     progress_bar.progress(100)
     return success
 
+
 ##########################
 # 5) Multi-Step UI (session-based)
 ##########################
@@ -291,8 +282,6 @@ def main():
             if st.button("Sign in with Google"):
                 link_html = open_auth_url_in_new_tab()
                 if link_html:
-                    # Instead of a normal hyperlink, we produce a custom link that closes the current tab
-                    # and opens the sign-in in a new tab.
                     st.markdown(
                         f"**If the new tab did not open automatically,** {link_html}",
                         unsafe_allow_html=True
