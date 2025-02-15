@@ -38,6 +38,28 @@ weekday_map = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 # 2) Helper Functions
 #############################
 
+def get_query_params():
+    """
+    Return the current URL query params in a version-safe manner:
+    - If st.query_params exists, use it.
+    - Otherwise, fall back to st.experimental_get_query_params.
+    """
+    try:
+        return st.query_params
+    except AttributeError:
+        return st.experimental_get_query_params()
+
+def set_query_params(**params):
+    """
+    Set the URL query params in a version-safe manner:
+    - If st.set_query_params exists, use it.
+    - Otherwise, fall back to st.experimental_set_query_params.
+    """
+    try:
+        st.set_query_params(**params)
+    except AttributeError:
+        st.experimental_set_query_params(**params)
+
 def get_first_date_on_or_after(start_date, target_weekday):
     """Return the first date on or after start_date that is target_weekday (0=Monday)."""
     days_ahead = target_weekday - start_date.weekday()
@@ -97,7 +119,7 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
                 is_lab = True
                 lab_key = slot_field.upper()
             else:
-                # Check sub-tokens
+                # Otherwise, check each token
                 for tok in slot_tokens:
                     if tok in lab_mapping or tok.startswith("L"):
                         is_lab = True
@@ -170,9 +192,6 @@ def get_google_calendar_service():
     Attempt a web-based OAuth flow with redirect to your domain.
     We'll detect ?code=... if user is returning from Google sign-in.
     If successful, store credentials in session_state["google_token"].
-    
-    NOTE: This code uses only st.query_params and st.set_query_params.
-          Make sure your Streamlit version supports them.
     """
     # 1) Check if we already have a token
     if "google_token" in st.session_state:
@@ -194,14 +213,15 @@ def get_google_calendar_service():
         st.error("Missing credentials.json in the same directory.")
         return None
 
+    # Create flow
     flow = InstalledAppFlow.from_client_secrets_file(
         "credentials.json",
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI
     )
 
-    # Check for ?code=...
-    query_params = st.query_params  # using only st.query_params
+    # Read query params (fallback approach)
+    query_params = get_query_params()
     if "code" in query_params:
         code = query_params["code"]
         try:
@@ -209,10 +229,9 @@ def get_google_calendar_service():
             creds = flow.credentials
             st.session_state["google_token"] = pickle.dumps(creds)
             # Remove the code from the URL
-            st.set_query_params()  # clear all params
+            set_query_params()  # clear all query params
             st.success("Google authentication successful! You can close this tab or proceed.")
-            # Possibly mention if user is back to step 1 in main tab:
-            st.info("If your main tab restarted at step 1, simply proceed or skip steps quickly. You are already authenticated.")
+            st.info("If your main tab restarted at step 1, just proceed or skip steps. You are already authenticated.")
             return build("calendar", "v3", credentials=creds)
         except Exception as e:
             st.error(f"Error fetching token: {e}")
@@ -242,7 +261,7 @@ def open_auth_url_in_new_tab():
         include_granted_scopes="true"
     )
 
-    # Attempt auto-open
+    # Attempt auto-open in new tab
     open_script = f"""
     <script>
         window.open("{auth_url}", "_blank");
@@ -259,10 +278,9 @@ def open_auth_url_in_new_tab():
 def main():
     st.title("Get Notifications on Google Calendar!!!")
 
-    # If user has come back from sign-in but the app restarted from step 1,
-    # we can show a small note:
+    # If user came back from sign-in but the app restarted from step 1:
     if "google_token" in st.session_state:
-        st.info("You are already authenticated. If you see Step 1 again, you can proceed or jump to Step 5 to create events.")
+        st.info("You are already authenticated. If you see Step 1 again, just proceed or jump to Step 5.")
 
     if "step" not in st.session_state:
         st.session_state["step"] = 1
@@ -346,7 +364,6 @@ def main():
         service = get_google_calendar_service()
         if service:
             st.success("You are authenticated with Google Calendar! (This may be the new tab).")
-            # Show a "Create Events Now" button
             if st.button("Create Events Now"):
                 cal_id = get_or_create_calendar(service, "Academic Timetable", st.session_state["timezone"])
                 if cal_id:
@@ -364,9 +381,7 @@ def main():
                         if "google_token" in st.session_state:
                             del st.session_state["google_token"]
                             st.info("Token removed. Next time you'll re-auth.")
-            # Stop so we don't keep re-running
             st.stop()
-
         else:
             # Not authenticated => show sign-in button
             st.warning("Not authenticated. Please click below to sign in in a new tab.")
