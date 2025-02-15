@@ -17,110 +17,11 @@ REDIRECT_URI = "https://vitaptimetablescheduler.streamlit.app"
 
 # Example placeholders
 theory_mapping = {
-    "A1": [("TU", "09:00", "09:50"), ("SA", "12:00", "12:50")],
-    "A2": [("TU", "15:00", "15:50"), ("SA", "16:00", "16:50")],
-    "B1": [("TU", "10:00", "10:50"), ("WE", "12:00", "12:50")],
-    "B2": [("WE", "17:00", "17:50"), ("TH", "14:00", "14:50")],
-    "C1": [("TU", "11:00", "11:50"), ("SA", "10:00", "10:50")],
-    "C2": [("TU", "17:00", "17:50"), ("FR", "14:00", "14:50")],
-    "D1": [("TU", "12:00", "12:50"), ("WE", "09:00", "09:50")],
-    "D2": [("WE", "14:00", "14:50"), ("SA", "14:00", "14:50")],
-    "E1": [("WE", "11:00", "11:50"), ("SA", "09:00", "09:50")],
-    "E2": [("TU", "14:00", "14:50"), ("WE", "15:00", "15:50")],
-    "F1": [("WE", "10:00", "10:50"), ("FR", "11:00", "11:50")],
-    "F2": [("WE", "16:00", "16:50"), ("TH", "15:00", "15:50")],
-    "G1": [("FR", "10:00", "10:50"), ("SA", "11:00", "11:50")],
-    "G2": [("TU", "16:00", "16:50"), ("FR", "16:00", "16:50")],
-    "TA1": [("TH", "11:00", "11:50")],
-    "TA2": [("TH", "17:00", "17:50")],
-    "TB1": [("FR", "09:00", "09:50")],
-    "TB2": [("FR", "15:00", "15:50")],
-    "TC1": [("TH", "09:00", "09:50")],
-    "TC2": [("SA", "15:00", "15:50")],
-    "TD1": [("TH", "10:00", "10:50")],
-    "TD2": [("TH", "16:00", "16:50")],
-    "TE1": [("FR", "12:00", "12:50")],
-    "TE2": [("FR", "17:00", "17:50")],
-    "TF1": [("TH", "08:00", "08:50")],
-    "TF2": [("TH", "18:00", "18:50")],
-    "TG1": [("WE", "08:00", "08:50")],
-    "TG2": [("SA", "18:00", "18:50")],
-    "TAA1": [("FR", "10:00", "10:50")],
-    "TBB1": [("SA", "11:00", "11:50")],
-    "TCC1": [("FR", "08:00", "08:50")],
-    "TDD1": [("SA", "08:00", "08:50")],
-    "TEE1": [("TU", "08:00", "08:50")],
-    "TFF1": [("TH", "12:00", "12:50")],
-    "TAA2": [("FR", "16:00", "16:50")],
-    "TBB2": [("TU", "16:00", "16:50")],
-    "TCC2": [("WE", "18:00", "18:50")],
-    "TDD2": [("TU", "18:00", "18:50")],
-    "TEE2": [("TH", "18:00", "18:50")],
-    "SC2": [("WE", "11:00", "11:50")],
-    "CLUBS": [("TH", "12:00", "12:50"), ("SA", "17:00", "17:50"), ("SA", "18:00", "18:50")],
-    "ECS": [("TH", "12:00", "12:50"), ("SA", "17:00", "17:50"), ("SA", "18:00", "18:50")],
-    "SD2": [("FR", "12:00", "12:50")],
-    "SE2": [("SA", "09:00", "09:50")],
-    "SE1": [("TU", "14:00", "14:50")],
-    "SC1": [("WE", "15:00", "15:50")],
-    "SD1": [("FR", "17:00", "17:50")],
-    "SF1": [("SA", "17:00", "17:50")]
+    # fill out your theory mapping
 }
-
-# LAB SLOTS MAPPING (final corrected lab timing table)
 lab_mapping = {
-    "L1+L2": [("TU", "08:00", "09:40")],
-    "L2+L3": [("TU", "09:00", "10:40")],
-    "L3+L4": [("TU", "10:00", "11:40")],
-    "L4+L5": [("TU", "11:00", "12:40")],
-    "L5+L6": [("TU", "12:00", "13:30")],
-    "L7+L8": [("WE", "08:00", "09:40")],
-    "L8+L9": [("WE", "09:00", "10:40")],
-    "L9+L10": [("WE", "10:00", "11:40")],
-    "L10+L11": [("WE", "11:00", "12:40")],
-    "L11+L12": [("WE", "12:00", "13:30")],
-    "L13+L14": [("TH", "08:00", "09:40")],
-    "L14+L15": [("TH", "09:00", "10:40")],
-    "L15+L16": [("TH", "10:00", "11:40")],
-    "L16+L17": [("TH", "11:00", "12:40")],
-    "L17+L18": [("TH", "12:00", "13:30")],
-    "L19+L20": [("FR", "08:00", "09:40")],
-    "L20+L21": [("FR", "09:00", "10:40")],
-    "L21+L22": [("FR", "10:00", "11:40")],
-    "L22+L23": [("FR", "11:00", "12:40")],
-    "L23+L24": [("FR", "12:00", "13:30")],
-    "L25+L26": [("SA", "08:00", "09:40")],
-    "L26+L27": [("SA", "09:00", "10:40")],
-    "L27+L28": [("SA", "10:00", "11:40")],
-    "L28+L29": [("SA", "11:00", "12:40")],
-    "L29+L30": [("SA", "12:00", "13:30")],
-    "L31+L32": [("TU", "14:00", "15:40")],
-    "L32+L33": [("TU", "15:00", "16:40")],  # shifted 1 hour
-    "L33+L34": [("TU", "16:00", "17:40")],
-    "L34+L35": [("TU", "17:00", "18:40")],
-    "L35+L36": [("TU", "18:00", "19:30")],  # fixed timing: ends at 7:30 PM
-    "L37+L38": [("WE", "14:00", "15:40")],
-    "L38+L39": [("WE", "15:00", "16:40")],
-    "L39+L40": [("WE", "16:00", "17:40")],
-    "L40+L41": [("WE", "17:00", "18:40")],
-    "L41+L42": [("WE", "18:00", "19:30")],  # fixed timing: ends at 7:30 PM
-    "L43+L44": [("TH", "14:00", "15:40")],
-    "L44+L45": [("TH", "15:00", "16:40")],
-    "L45+L46": [("TH", "16:00", "17:40")],
-    "L46+L47": [("TH", "17:00", "18:40")],  # fixed timing: 5:00 PM - 6:40 PM
-    "L47+L48": [("TH", "18:00", "19:30")],  # fixed timing: 6:00 PM - 7:30 PM
-    "L49+L50": [("FR", "14:00", "15:40")],
-    "L50+L51": [("FR", "15:00", "16:40")],
-    "L51+L52": [("FR", "16:00", "17:40")],
-    "L52+L53": [("FR", "17:00", "18:40")],
-    "L53+L54": [("FR", "18:00", "19:30")],  # fixed timing: ends at 7:30 PM
-    "L55+L56": [("SA", "14:00", "15:40")],
-    "L56+L57": [("SA", "15:00", "16:40")],
-    "L57+L58": [("SA", "16:00", "17:40")],
-    "L58+L59": [("SA", "17:00", "18:40")],
-    "L59+L60": [("SA", "18:00", "19:30")]   # fixed timing: ends at 7:30 PM
+    # fill out your lab mapping
 }
-
 weekday_map = {
     "MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6
 }
@@ -159,7 +60,6 @@ def get_google_calendar_service():
     )
 
     # Check if user came back with code=...
-    # If so, exchange for credentials
     query_params = st.experimental_get_query_params()
     code = query_params.get("code", [None])[0]
     if code:
@@ -167,6 +67,8 @@ def get_google_calendar_service():
             flow.fetch_token(code=code)
             creds = flow.credentials
             st.session_state["google_token"] = pickle.dumps(creds)
+            # Immediately remove ?code=... from the URL
+            st.experimental_set_query_params()
             st.success("Google authentication successful! You may close the sign-in tab.")
             return build("calendar", "v3", credentials=creds)
         except Exception as e:
@@ -203,7 +105,17 @@ def open_auth_url_in_new_tab():
     </script>
     """
     st.markdown(open_script, unsafe_allow_html=True)
-    return auth_url
+
+    # Create a custom link that closes the current tab and opens the sign-in in a new tab
+    # (May be blocked by some browsers.)
+    close_and_open = f"""
+    <a href="#"
+       onclick="window.open('{auth_url}','_blank'); window.close(); return false;"
+       style="color: blue; text-decoration: underline;">
+       click here to sign in manually
+    </a>
+    """
+    return close_and_open
 
 ##########################
 # 3) Timetable Helpers
@@ -274,10 +186,10 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
     success = True
 
     for idx, row in df.iterrows():
-        course = row["Course"].strip()
-        slot_field = row["Slot"].strip()
-        venue = row["Venue"].strip()
-        faculty = row["Faculty Details"].strip()
+        course = row.get("Course", "").strip()
+        slot_field = row.get("Slot", "").strip()
+        venue = row.get("Venue", "").strip()
+        faculty = row.get("Faculty Details", "").strip()
 
         if "EMBEDDED PROJECT" in course.upper():
             continue
@@ -290,10 +202,12 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
             is_lab = False
             lab_key = None
 
+            # Check if entire slot_field is in lab_mapping
             if slot_field.upper() in lab_mapping:
                 is_lab = True
                 lab_key = slot_field.upper()
             else:
+                # Otherwise, check each token
                 for tok in slot_tokens:
                     if tok in lab_mapping or tok.startswith("L"):
                         is_lab = True
@@ -303,7 +217,7 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
             if is_lab:
                 mapping = lab_mapping.get(lab_key)
                 if not mapping:
-                    st.warning(f"Lab slot '{lab_key}' not found. Skipping row {idx}.")
+                    st.warning(f"Lab slot '{lab_key}' not found in mapping. Skipping row {idx}.")
                     continue
                 for day_code, start_str, end_str in mapping:
                     sh, sm = map(int, start_str.split(":"))
@@ -375,11 +289,13 @@ def main():
         else:
             st.warning("Not authenticated. Please sign in first (opens in new tab).")
             if st.button("Sign in with Google"):
-                auth_url = open_auth_url_in_new_tab()
-                if auth_url:
-                    st.write(
-                        "**If the new tab did not open automatically,** "
-                        f"[click here to sign in manually]({auth_url})"
+                link_html = open_auth_url_in_new_tab()
+                if link_html:
+                    # Instead of a normal hyperlink, we produce a custom link that closes the current tab
+                    # and opens the sign-in in a new tab.
+                    st.markdown(
+                        f"**If the new tab did not open automatically,** {link_html}",
+                        unsafe_allow_html=True
                     )
 
         st.write("---")
@@ -494,11 +410,13 @@ def main():
                             notifications=notifs
                         )
                         if success:
+                            # Remove code param from URL in case it's still there
+                            st.experimental_set_query_params()
                             st.success("Calendar events created successfully!")
-                            # Optionally remove token so next time user must re-auth
+                            # Remove token so next time user must re-auth
                             if "google_token" in st.session_state:
                                 del st.session_state["google_token"]
-                                st.info("Token removed. Next time you'll re-auth.")
+                            st.info("Token removed. Next time you'll re-auth.")
         else:
             st.warning("You are not authenticated (maybe you reloaded?). Go back to Step 1 to sign in.")
         st.stop()
