@@ -6,6 +6,8 @@ import pandas as pd
 import os
 import pickle
 from datetime import datetime, timedelta
+
+# Google OAuth
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
@@ -18,6 +20,7 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 # EXACT domain in your Google console's "Authorized redirect URIs"
 REDIRECT_URI = "https://vitaptimetablescheduler.streamlit.app"
 
+# Example placeholders for your existing logic
 theory_mapping = {
     "A1": [("TU", "09:00", "09:50"), ("SA", "12:00", "12:50")],
     "A2": [("TU", "15:00", "15:50"), ("SA", "16:00", "16:50")],
@@ -35,6 +38,7 @@ weekday_map = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 # 2) Helper Functions
 #############################
 def get_first_date_on_or_after(start_date, target_weekday):
+    """Return the first date on or after start_date that is target_weekday (0=Monday)."""
     days_ahead = target_weekday - start_date.weekday()
     if days_ahead < 0:
         days_ahead += 7
@@ -55,6 +59,10 @@ def get_or_create_calendar(service, calendar_name, timezone="Asia/Kolkata"):
 
 def create_calendar_events(service, df, semester_start_date, calendar_id,
                            timezone="Asia/Kolkata", notifications=[]):
+    """
+    Creates events from a DataFrame with columns: Course, Slot, Venue, Faculty Details.
+    Distinguishes between theory & lab using 'theory_mapping' & 'lab_mapping'.
+    """
     if not service or not calendar_id:
         return False
 
@@ -66,10 +74,10 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
     success = True
 
     for idx, row in df.iterrows():
-        course = row["Course"].strip()
-        slot_field = row["Slot"].strip()
-        venue = row["Venue"].strip()
-        faculty = row["Faculty Details"].strip()
+        course = row.get("Course", "").strip()
+        slot_field = row.get("Slot", "").strip()
+        venue = row.get("Venue", "").strip()
+        faculty = row.get("Faculty Details", "").strip()
 
         if "EMBEDDED PROJECT" in course.upper():
             continue
@@ -82,12 +90,12 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
             is_lab = False
             lab_key = None
 
-            # Check if entire slot_field is in lab_mapping
+            # 1) If entire slot_field in lab_mapping
             if slot_field.upper() in lab_mapping:
                 is_lab = True
                 lab_key = slot_field.upper()
             else:
-                # Check sub-tokens
+                # 2) Check sub-tokens
                 for tok in slot_tokens:
                     if tok in lab_mapping or tok.startswith("L"):
                         is_lab = True
@@ -95,7 +103,6 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
                         break
 
             if is_lab:
-                # Lab
                 mapping = lab_mapping.get(lab_key)
                 if not mapping:
                     st.warning(f"Lab slot '{lab_key}' not found. Skipping row {idx}.")
@@ -106,6 +113,7 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
                     first_date = get_first_date_on_or_after(semester_start_date, weekday_map[day_code])
                     dtstart = datetime.combine(first_date, datetime.min.time()).replace(hour=sh, minute=sm)
                     dtend = datetime.combine(first_date, datetime.min.time()).replace(hour=eh, minute=em)
+
                     event_body = {
                         "summary": summary,
                         "location": venue,
@@ -129,6 +137,7 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
                         first_date = get_first_date_on_or_after(semester_start_date, weekday_map[day_code])
                         dtstart = datetime.combine(first_date, datetime.min.time()).replace(hour=sh, minute=sm)
                         dtend = datetime.combine(first_date, datetime.min.time()).replace(hour=eh, minute=em)
+
                         event_body = {
                             "summary": summary,
                             "location": venue,
@@ -155,11 +164,14 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
 #############################
 def get_google_calendar_service():
     """
-    Attempt a web-based OAuth flow with redirect to your domain. 
+    Attempt a web-based OAuth flow with redirect to your domain.
     We'll detect ?code=... if user is returning from Google sign-in.
+    If successful, store credentials in session_state["google_token"].
     """
+    # 1) Check if we already have a token
     if "google_token" in st.session_state:
         creds = pickle.loads(st.session_state["google_token"])
+        # Possibly refresh
         if creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
@@ -168,9 +180,11 @@ def get_google_calendar_service():
                 st.error(f"Could not refresh token: {e}")
                 del st.session_state["google_token"]
                 creds = None
+        # If still valid
         if creds and creds.valid:
             return build("calendar", "v3", credentials=creds)
 
+    # 2) If no valid creds, check if user returned with ?code=...
     if not os.path.exists("credentials.json"):
         st.error("Missing credentials.json in the same directory.")
         return None
@@ -181,28 +195,31 @@ def get_google_calendar_service():
         redirect_uri=REDIRECT_URI
     )
 
-    # If user returned with ?code=...
-    query_params = st.query_params
+    # Using the "experimental" approach if "set_query_params" not available in your version:
+    query_params = st.experimental_get_query_params()  # fallback
     if "code" in query_params:
-        code = query_params["code"]
+        code = query_params["code"][0]  # typically a list
         try:
             flow.fetch_token(code=code)
             creds = flow.credentials
             st.session_state["google_token"] = pickle.dumps(creds)
-            # Clear the code param
-            st.set_query_params()
-            st.success("Google authentication successful!")
+            # Remove the code from the URL
+            st.experimental_set_query_params()
+            st.success("Google authentication successful! You can close this tab now.")
             return build("calendar", "v3", credentials=creds)
         except Exception as e:
             st.error(f"Error fetching token: {e}")
             return None
 
-    # If no code => user hasn't authorized yet
+    # 3) No code => user not authorized
     return None
 
 
 def open_auth_url_in_new_tab():
-    """Generate the Google OAuth URL and attempt to open it in a new tab."""
+    """
+    Generate the Google OAuth URL and attempt to open it in a new tab.
+    We'll also return the URL so user can click if popup is blocked.
+    """
     if not os.path.exists("credentials.json"):
         st.error("Missing credentials.json!")
         return None
@@ -218,7 +235,7 @@ def open_auth_url_in_new_tab():
         include_granted_scopes="true"
     )
 
-    # Auto-open attempt
+    # Attempt auto-open
     open_script = f"""
     <script>
         window.open("{auth_url}", "_blank");
@@ -226,7 +243,6 @@ def open_auth_url_in_new_tab():
     """
     st.markdown(open_script, unsafe_allow_html=True)
 
-    # Return the URL so user can click if the script fails
     return auth_url
 
 
@@ -236,6 +252,7 @@ def open_auth_url_in_new_tab():
 def main():
     st.title("Get Notifications on Google Calendar!!!")
 
+    # Keep track of steps
     if "step" not in st.session_state:
         st.session_state["step"] = 1
 
@@ -253,9 +270,9 @@ def main():
                 st.write("### CSV Preview")
                 st.dataframe(df)
         else:
-            timetable_text = st.text_area("Paste Timetable Text", height=300)
+            timetable_text = st.text_area("Paste your timetable text below:", height=300)
             if timetable_text:
-                # Dummy parse
+                # Example parse or dummy row
                 df = pd.DataFrame([{
                     "Course": "Example Course from text",
                     "Slot": "A1",
@@ -314,9 +331,11 @@ def main():
     elif st.session_state["step"] == 5:
         st.header("Step 5: Create Calendar Events")
 
+        # Attempt to see if user is returning from sign-in
         service = get_google_calendar_service()
         if service:
-            st.success("You are authenticated with Google Calendar!")
+            st.success("You are authenticated with Google Calendar! (This may be the new tab).")
+            # Show a "Create Events Now" button
             if st.button("Create Events Now"):
                 cal_id = get_or_create_calendar(service, "Academic Timetable", st.session_state["timezone"])
                 if cal_id:
@@ -334,9 +353,12 @@ def main():
                         if "google_token" in st.session_state:
                             del st.session_state["google_token"]
                             st.info("Token removed. Next time you'll re-auth.")
+            # We stop here so the new tab doesn't re-run infinitely
             st.stop()
+
         else:
-            st.warning("Not authenticated. Please click below to sign in.")
+            # Not authenticated => show sign-in button
+            st.warning("Not authenticated. Please click below to sign in in a new tab.")
             if st.button("Sign in with Google in new tab"):
                 auth_url = open_auth_url_in_new_tab()
                 if auth_url:
