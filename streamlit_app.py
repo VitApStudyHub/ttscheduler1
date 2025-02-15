@@ -33,9 +33,11 @@ lab_mapping = {
 }
 weekday_map = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
+
 #############################
 # 2) Helper Functions
 #############################
+
 def get_query_params():
     """Use st.query_params if available, else fall back to st.experimental_get_query_params."""
     try:
@@ -58,6 +60,7 @@ def get_first_date_on_or_after(start_date, target_weekday):
     return start_date + timedelta(days=days_ahead)
 
 def get_or_create_calendar(service, calendar_name, timezone="Asia/Kolkata"):
+    """Create or find a named calendar."""
     if not service:
         return None
     cals = service.calendarList().list().execute()
@@ -68,9 +71,14 @@ def get_or_create_calendar(service, calendar_name, timezone="Asia/Kolkata"):
     new_cal = service.calendars().insert(body=body).execute()
     return new_cal.get("id")
 
+
 def create_calendar_events(service, df, semester_start_date, calendar_id,
                            timezone="Asia/Kolkata", notifications=[]):
-    """Creates events from a DataFrame with columns: Course, Slot, Venue, Faculty Details."""
+    """
+    Creates events from a DataFrame with columns: 
+      ["Course", "Slot", "Venue", "Faculty Details"].
+    Uses your theory_mapping & lab_mapping to schedule events.
+    """
     if not service or not calendar_id:
         return False
 
@@ -99,12 +107,12 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
             is_lab = False
             lab_key = None
 
-            # 1) If entire slot_field in lab_mapping
+            # Check if entire slot_field is in lab_mapping
             if slot_field.upper() in lab_mapping:
                 is_lab = True
                 lab_key = slot_field.upper()
             else:
-                # 2) Check sub-tokens
+                # Check sub-tokens
                 for tok in slot_tokens:
                     if tok in lab_mapping or tok.startswith("L"):
                         is_lab = True
@@ -162,10 +170,12 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
             st.error(f"Error creating event for {course}: {str(e)}")
             success = False
 
-        prog_bar.progress(int(((idx + 1) / total_rows) * 100))
+        progress_val = int(((idx + 1) / total_rows) * 100)
+        prog_bar.progress(min(progress_val, 100))
 
     prog_bar.progress(100)
     return success
+
 
 #############################
 # 3) Google Auth Flow
@@ -253,6 +263,7 @@ def open_auth_url_in_new_tab():
     st.markdown(open_script, unsafe_allow_html=True)
 
     return auth_url
+
 
 #############################
 # 4) Multi-Step UI
@@ -365,7 +376,7 @@ def main():
                         if "google_token" in st.session_state:
                             del st.session_state["google_token"]
                             st.info("Token removed. Next time you'll re-auth.")
-            # We stop here so the new tab doesn't re-run infinitely
+            # Stop so we don't keep re-running
             st.stop()
 
         else:
