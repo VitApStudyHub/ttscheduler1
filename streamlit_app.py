@@ -38,20 +38,6 @@ weekday_map = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 # 2) Helper Functions
 #############################
 
-def get_query_params():
-    """Use st.query_params if available, else fall back to st.experimental_get_query_params."""
-    try:
-        return st.query_params
-    except AttributeError:
-        return st.experimental_get_query_params()
-
-def set_query_params(**params):
-    """Use st.set_query_params if available, else fall back to st.experimental_set_query_params."""
-    try:
-        st.set_query_params(**params)
-    except AttributeError:
-        st.experimental_set_query_params(**params)
-
 def get_first_date_on_or_after(start_date, target_weekday):
     """Return the first date on or after start_date that is target_weekday (0=Monday)."""
     days_ahead = target_weekday - start_date.weekday()
@@ -71,11 +57,10 @@ def get_or_create_calendar(service, calendar_name, timezone="Asia/Kolkata"):
     new_cal = service.calendars().insert(body=body).execute()
     return new_cal.get("id")
 
-
 def create_calendar_events(service, df, semester_start_date, calendar_id,
                            timezone="Asia/Kolkata", notifications=[]):
     """
-    Creates events from a DataFrame with columns: 
+    Creates events from a DataFrame with columns:
       ["Course", "Slot", "Venue", "Faculty Details"].
     Uses your theory_mapping & lab_mapping to schedule events.
     """
@@ -185,6 +170,9 @@ def get_google_calendar_service():
     Attempt a web-based OAuth flow with redirect to your domain.
     We'll detect ?code=... if user is returning from Google sign-in.
     If successful, store credentials in session_state["google_token"].
+    
+    NOTE: This code uses only st.query_params and st.set_query_params.
+          Make sure your Streamlit version supports them.
     """
     # 1) Check if we already have a token
     if "google_token" in st.session_state:
@@ -213,7 +201,7 @@ def get_google_calendar_service():
     )
 
     # Check for ?code=...
-    query_params = get_query_params()
+    query_params = st.query_params  # using only st.query_params
     if "code" in query_params:
         code = query_params["code"]
         try:
@@ -221,7 +209,7 @@ def get_google_calendar_service():
             creds = flow.credentials
             st.session_state["google_token"] = pickle.dumps(creds)
             # Remove the code from the URL
-            set_query_params()  # clear all params
+            st.set_query_params()  # clear all params
             st.success("Google authentication successful! You can close this tab or proceed.")
             # Possibly mention if user is back to step 1 in main tab:
             st.info("If your main tab restarted at step 1, simply proceed or skip steps quickly. You are already authenticated.")
