@@ -33,17 +33,29 @@ lab_mapping = {
 }
 weekday_map = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
-
 #############################
 # 2) Helper Functions
 #############################
+def get_query_params():
+    """Use st.query_params if available, else fall back to st.experimental_get_query_params."""
+    try:
+        return st.query_params
+    except AttributeError:
+        return st.experimental_get_query_params()
+
+def set_query_params(**params):
+    """Use st.set_query_params if available, else fall back to st.experimental_set_query_params."""
+    try:
+        st.set_query_params(**params)
+    except AttributeError:
+        st.experimental_set_query_params(**params)
+
 def get_first_date_on_or_after(start_date, target_weekday):
     """Return the first date on or after start_date that is target_weekday (0=Monday)."""
     days_ahead = target_weekday - start_date.weekday()
     if days_ahead < 0:
         days_ahead += 7
     return start_date + timedelta(days=days_ahead)
-
 
 def get_or_create_calendar(service, calendar_name, timezone="Asia/Kolkata"):
     if not service:
@@ -56,13 +68,9 @@ def get_or_create_calendar(service, calendar_name, timezone="Asia/Kolkata"):
     new_cal = service.calendars().insert(body=body).execute()
     return new_cal.get("id")
 
-
 def create_calendar_events(service, df, semester_start_date, calendar_id,
                            timezone="Asia/Kolkata", notifications=[]):
-    """
-    Creates events from a DataFrame with columns: Course, Slot, Venue, Faculty Details.
-    Distinguishes between theory & lab using 'theory_mapping' & 'lab_mapping'.
-    """
+    """Creates events from a DataFrame with columns: Course, Slot, Venue, Faculty Details."""
     if not service or not calendar_id:
         return False
 
@@ -79,6 +87,7 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
         venue = row.get("Venue", "").strip()
         faculty = row.get("Faculty Details", "").strip()
 
+        # Example skip logic
         if "EMBEDDED PROJECT" in course.upper():
             continue
         if "NIL-ONL" in venue.upper():
@@ -158,7 +167,6 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
     prog_bar.progress(100)
     return success
 
-
 #############################
 # 3) Google Auth Flow
 #############################
@@ -184,7 +192,6 @@ def get_google_calendar_service():
         if creds and creds.valid:
             return build("calendar", "v3", credentials=creds)
 
-    # 2) If no valid creds, check if user returned with ?code=...
     if not os.path.exists("credentials.json"):
         st.error("Missing credentials.json in the same directory.")
         return None
@@ -195,23 +202,25 @@ def get_google_calendar_service():
         redirect_uri=REDIRECT_URI
     )
 
-    # Using the "experimental" approach if "set_query_params" not available in your version:
-    query_params = st.experimental_get_query_params()  # fallback
+    # Check for ?code=...
+    query_params = get_query_params()
     if "code" in query_params:
-        code = query_params["code"][0]  # typically a list
+        code = query_params["code"]
         try:
             flow.fetch_token(code=code)
             creds = flow.credentials
             st.session_state["google_token"] = pickle.dumps(creds)
             # Remove the code from the URL
-            st.experimental_set_query_params()
-            st.success("Google authentication successful! You can close this tab now.")
+            set_query_params()  # clear all params
+            st.success("Google authentication successful! You can close this tab or proceed.")
+            # Possibly mention if user is back to step 1 in main tab:
+            st.info("If your main tab restarted at step 1, simply proceed or skip steps quickly. You are already authenticated.")
             return build("calendar", "v3", credentials=creds)
         except Exception as e:
             st.error(f"Error fetching token: {e}")
             return None
 
-    # 3) No code => user not authorized
+    # 2) No code => user not authorized
     return None
 
 
@@ -245,14 +254,17 @@ def open_auth_url_in_new_tab():
 
     return auth_url
 
-
 #############################
 # 4) Multi-Step UI
 #############################
 def main():
     st.title("Get Notifications on Google Calendar!!!")
 
-    # Keep track of steps
+    # If user has come back from sign-in but the app restarted from step 1,
+    # we can show a small note:
+    if "google_token" in st.session_state:
+        st.info("You are already authenticated. If you see Step 1 again, you can proceed or jump to Step 5 to create events.")
+
     if "step" not in st.session_state:
         st.session_state["step"] = 1
 
