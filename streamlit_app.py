@@ -9,9 +9,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 
-# If needed for ICS:
-# from ics import Calendar, Event
-
 ##########################
 # 1) Constants & Mappings
 ##########################
@@ -101,12 +98,9 @@ def get_google_calendar_service():
     query = get_query_params()
     code = query.get("code", [None])[0]
     if code:
-        # The full URL is your domain + ?code=...
-        # But flow.fetch_token can also accept just the code in a simplified manner:
-        # For best reliability, pass the entire "authorization_response" with code included:
-        authorization_response = f"{REDIRECT_URI}?code={code}"
+        # The user has just returned from Google sign-in with ?code=...
         try:
-            flow.fetch_token(authorization_response=authorization_response)
+            flow.fetch_token(code=code)  # simpler approach for web credentials
             creds = flow.credentials
             st.session_state["google_token"] = pickle.dumps(creds)
             # Clear ?code=..., but keep the same step
@@ -131,10 +125,10 @@ def open_auth_url_in_new_tab():
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI
     )
+    # Removed include_granted_scopes to avoid "invalid parameter" errors
     auth_url, _ = flow.authorization_url(
         prompt="consent",
-        access_type="offline",
-        include_granted_scopes=True
+        access_type="offline"
     )
     # Attempt auto-open
     open_script = f"""
@@ -219,7 +213,6 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
         venue = row["Venue"].strip()
         faculty = row["Faculty Details"].strip()
 
-        # Example skip logic
         if "EMBEDDED PROJECT" in course.upper():
             continue
         if "NIL-ONL" in venue.upper():
@@ -300,13 +293,9 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
 def main():
     st.title("Get Notifications on Google Calendar!!!")
 
-    # Retrieve current step from the URL (default=1)
     step = get_current_step()
 
-    # If user has data from prior steps in session, e.g. df, we keep it
-    # We'll rely on st.session_state for data (like 'df', 'notification_times', etc.)
-
-    # Step 1: Upload or Paste Timetable
+    # Step 1
     if step == 1:
         st.header("Step 1: Upload Timetable")
         method = st.radio("Input Method", ["Upload CSV", "Paste Timetable Text"])
@@ -340,9 +329,8 @@ def main():
             if "df" not in st.session_state:
                 st.error("Please provide timetable data first!")
             else:
-                go_to_step(2)  # set ?step=2
+                go_to_step(2)
 
-    # Step 2: Semester Start
     elif step == 2:
         st.header("Step 2: Select Semester Start Date")
         date_val = st.date_input("Semester Start Date", value=datetime.now().date())
@@ -350,7 +338,6 @@ def main():
         if st.button("Next"):
             go_to_step(3)
 
-    # Step 3: Timezone
     elif step == 3:
         st.header("Step 3: Select Timezone")
         tz = st.selectbox("Choose Timezone", ["Asia/Kolkata", "UTC"])
@@ -358,9 +345,8 @@ def main():
         if st.button("Next"):
             go_to_step(4)
 
-    # Step 4: Notifications
     elif step == 4:
-        st.header("Step 4: Set up to 3 Notifications (minutes before event)")
+        st.header("Step 4: Notifications (minutes before event)")
         with st.form("notif_form"):
             ntimes = []
             for i in range(3):
@@ -378,12 +364,10 @@ def main():
                 st.session_state["notification_times"] = ntimes
                 go_to_step(5)
 
-    # Step 5: Create Calendar Events
     elif step == 5:
         st.header("Step 5: Create Calendar Events")
         st.write("We'll now authenticate with Google and create events in your calendar.")
 
-        # Attempt to get service if user just returned with code=...
         service = get_google_calendar_service()
         if service:
             st.success("You are authenticated with Google Calendar!")
@@ -410,7 +394,6 @@ def main():
                         )
                         if success:
                             st.success("Calendar events created successfully!")
-                            # Optionally remove token so next time user must re-auth
                             if "google_token" in st.session_state:
                                 del st.session_state["google_token"]
                                 st.info("Token removed. Next time you'll re-auth.")
@@ -428,7 +411,6 @@ def main():
             st.session_state.clear()
             set_query_params(step="1")
 
-    # If user tries an invalid step number, just do nothing or redirect to step 1
     else:
         st.warning("Invalid step. Redirecting to step 1...")
         go_to_step(1)
