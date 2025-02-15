@@ -69,8 +69,10 @@ def get_google_calendar_service():
       - If we have valid creds in st.session_state, use them.
       - Else if ?code=... in the URL, fetch_token and store creds.
       - Otherwise, return None => not signed in.
+
+    Also uses the 'state' param to recover the step user was on.
     """
-    # Check if we already have a stored token
+    # 1) If we already have a stored token
     if "google_token" in st.session_state:
         creds = pickle.loads(st.session_state["google_token"])
         if creds.expired and creds.refresh_token:
@@ -84,7 +86,7 @@ def get_google_calendar_service():
         if creds and creds.valid:
             return build("calendar", "v3", credentials=creds)
 
-    # If no local creds, check if user returned with ?code=...
+    # 2) If no local creds, see if user returned with ?code=... from Google
     if not os.path.exists("credentials.json"):
         st.error("Missing credentials.json in the same directory.")
         return None
@@ -97,15 +99,21 @@ def get_google_calendar_service():
 
     query = get_query_params()
     code = query.get("code", [None])[0]
+    state = query.get("state", [None])[0]  # The step we stored
     if code:
-        # The user has just returned from Google sign-in with ?code=...
         try:
-            flow.fetch_token(code=code)  # simpler approach for web credentials
+            # Attempt to exchange the auth code for credentials
+            flow.fetch_token(code=code)
             creds = flow.credentials
             st.session_state["google_token"] = pickle.dumps(creds)
-            # Clear ?code=..., but keep the same step
-            current_step = query.get("step", ["5"])[0]
-            set_query_params(step=current_step)
+
+            # Restore the step from 'state' if present
+            if state and state.isdigit():
+                set_query_params(step=state)
+            else:
+                # fallback to step 5 if no state was found
+                set_query_params(step="5")
+
             st.success("Google authentication successful! You may close the sign-in tab.")
             return build("calendar", "v3", credentials=creds)
         except Exception as e:
@@ -115,7 +123,10 @@ def get_google_calendar_service():
     return None  # Not authenticated yet
 
 def open_auth_url_in_new_tab():
-    """Generate Google OAuth URL, open in new tab, also return the link."""
+    """
+    Generate the Google OAuth URL, passing 'state' as the current step,
+    open in a new tab, and return the link for manual fallback.
+    """
     if not os.path.exists("credentials.json"):
         st.error("Missing credentials.json!")
         return None
@@ -125,11 +136,15 @@ def open_auth_url_in_new_tab():
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI
     )
+
+    current_step = get_current_step()
     # Removed include_granted_scopes to avoid "invalid parameter" errors
     auth_url, _ = flow.authorization_url(
         prompt="consent",
-        access_type="offline"
+        access_type="offline",
+        state=str(current_step)  # store the current step in 'state'
     )
+
     # Attempt auto-open
     open_script = f"""
     <script>
