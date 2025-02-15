@@ -10,16 +10,14 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 
-# If you use ICS or additional logic, import as needed:
-# from ics import Calendar, Event
-
-###################################
-# 1) Config & Mappings
-###################################
+#############################
+# 1) Constants & Mappings
+#############################
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
-REDIRECT_URI = "https://vitaptimetablescheduler.streamlit.app"  # EXACT match in your Google Console
 
-# Example placeholders from your prior code
+# EXACT domain in your Google console's "Authorized redirect URIs"
+REDIRECT_URI = "https://vitaptimetablescheduler.streamlit.app"
+
 theory_mapping = {
     "A1": [("TU", "09:00", "09:50"), ("SA", "12:00", "12:50")],
     "A2": [("TU", "15:00", "15:50"), ("SA", "16:00", "16:50")],
@@ -33,11 +31,10 @@ lab_mapping = {
 weekday_map = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
 
-###################################
+#############################
 # 2) Helper Functions
-###################################
+#############################
 def get_first_date_on_or_after(start_date, target_weekday):
-    """Return the first date on or after start_date that is target_weekday (0=Monday)."""
     days_ahead = target_weekday - start_date.weekday()
     if days_ahead < 0:
         days_ahead += 7
@@ -45,7 +42,6 @@ def get_first_date_on_or_after(start_date, target_weekday):
 
 
 def get_or_create_calendar(service, calendar_name, timezone="Asia/Kolkata"):
-    """Create or find a named calendar."""
     if not service:
         return None
     cals = service.calendarList().list().execute()
@@ -59,10 +55,6 @@ def get_or_create_calendar(service, calendar_name, timezone="Asia/Kolkata"):
 
 def create_calendar_events(service, df, semester_start_date, calendar_id,
                            timezone="Asia/Kolkata", notifications=[]):
-    """
-    Creates events from a DataFrame with columns: Course, Slot, Venue, Faculty Details.
-    Distinguishes between theory & lab using 'theory_mapping' & 'lab_mapping'.
-    """
     if not service or not calendar_id:
         return False
 
@@ -70,7 +62,7 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
     reminders = {"useDefault": False, "overrides": overrides}
 
     total_rows = len(df)
-    prog = st.progress(0)
+    prog_bar = st.progress(0)
     success = True
 
     for idx, row in df.iterrows():
@@ -79,7 +71,6 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
         venue = row["Venue"].strip()
         faculty = row["Faculty Details"].strip()
 
-        # Example skip logic
         if "EMBEDDED PROJECT" in course.upper():
             continue
         if "NIL-ONL" in venue.upper():
@@ -91,12 +82,12 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
             is_lab = False
             lab_key = None
 
-            # 1) If entire slot_field in lab_mapping
+            # Check if entire slot_field is in lab_mapping
             if slot_field.upper() in lab_mapping:
                 is_lab = True
                 lab_key = slot_field.upper()
             else:
-                # 2) Check sub-tokens
+                # Check sub-tokens
                 for tok in slot_tokens:
                     if tok in lab_mapping or tok.startswith("L"):
                         is_lab = True
@@ -153,22 +144,20 @@ def create_calendar_events(service, df, semester_start_date, calendar_id,
             st.error(f"Error creating event for {course}: {str(e)}")
             success = False
 
-        prog.progress(int(((idx + 1) / total_rows) * 100))
+        prog_bar.progress(int(((idx + 1) / total_rows) * 100))
 
-    prog.progress(100)
+    prog_bar.progress(100)
     return success
 
 
-###################################
-# 3) The Web Flow & Sign-In
-###################################
+#############################
+# 3) Google Auth Flow
+#############################
 def get_google_calendar_service():
     """
     Attempt a web-based OAuth flow with redirect to your domain. 
-    We'll open the Google sign-in page in a new tab if the user clicks 'Create Events Now.'
-    Then after sign-in, Google redirects back with ?code=..., which we detect to fetch_token.
+    We'll detect ?code=... if user is returning from Google sign-in.
     """
-    # If we previously stored a token, see if it's still valid
     if "google_token" in st.session_state:
         creds = pickle.loads(st.session_state["google_token"])
         if creds.expired and creds.refresh_token:
@@ -182,7 +171,6 @@ def get_google_calendar_service():
         if creds and creds.valid:
             return build("calendar", "v3", credentials=creds)
 
-    # If not found or invalid => begin the web flow
     if not os.path.exists("credentials.json"):
         st.error("Missing credentials.json in the same directory.")
         return None
@@ -193,32 +181,28 @@ def get_google_calendar_service():
         redirect_uri=REDIRECT_URI
     )
 
-    # Check if user is returning with ?code=...
-    query_params = st.query_params  # replaced st.experimental_get_query_params
+    # If user returned with ?code=...
+    query_params = st.query_params
     if "code" in query_params:
         code = query_params["code"]
         try:
             flow.fetch_token(code=code)
             creds = flow.credentials
             st.session_state["google_token"] = pickle.dumps(creds)
-            # Clear the code param from the URL
-            st.set_query_params()  # replaced st.experimental_set_query_params
+            # Clear the code param
+            st.set_query_params()
             st.success("Google authentication successful!")
             return build("calendar", "v3", credentials=creds)
         except Exception as e:
             st.error(f"Error fetching token: {e}")
             return None
-    else:
-        # No code => user hasn't authorized. We won't show the link right away
-        # We'll generate the link only on demand when user clicks a button
-        return None
+
+    # If no code => user hasn't authorized yet
+    return None
 
 
 def open_auth_url_in_new_tab():
-    """
-    Return the authorization URL from Google, and produce a script 
-    to auto-open in a new tab.
-    """
+    """Generate the Google OAuth URL and attempt to open it in a new tab."""
     if not os.path.exists("credentials.json"):
         st.error("Missing credentials.json!")
         return None
@@ -234,27 +218,28 @@ def open_auth_url_in_new_tab():
         include_granted_scopes="true"
     )
 
-    # Attempt to open in new tab
+    # Auto-open attempt
     open_script = f"""
     <script>
         window.open("{auth_url}", "_blank");
     </script>
     """
     st.markdown(open_script, unsafe_allow_html=True)
+
+    # Return the URL so user can click if the script fails
     return auth_url
 
 
-###################################
-# 4) The Multi-Step UI
-###################################
+#############################
+# 4) Multi-Step UI
+#############################
 def main():
     st.title("Get Notifications on Google Calendar!!!")
 
-    # If not present, set up steps
     if "step" not in st.session_state:
         st.session_state["step"] = 1
 
-    # Step 1: Upload or Paste Timetable
+    # Step 1
     if st.session_state["step"] == 1:
         st.header("Step 1: Upload Timetable")
         input_method = st.radio("Input Method", ["Upload CSV", "Paste Timetable Text"])
@@ -289,7 +274,7 @@ def main():
                 st.session_state["step"] = 2
             st.stop()
 
-    # Step 2: Semester Start
+    # Step 2
     elif st.session_state["step"] == 2:
         st.header("Step 2: Select Semester Start Date")
         sem_start = st.date_input("Semester Start", value=datetime.now().date())
@@ -298,7 +283,7 @@ def main():
             st.session_state["step"] = 3
         st.stop()
 
-    # Step 3: Timezone
+    # Step 3
     elif st.session_state["step"] == 3:
         st.header("Step 3: Select Timezone")
         tz = st.selectbox("Choose Timezone", ["Asia/Kolkata", "UTC"])
@@ -307,7 +292,7 @@ def main():
             st.session_state["step"] = 4
         st.stop()
 
-    # Step 4: Notifications
+    # Step 4
     elif st.session_state["step"] == 4:
         st.header("Step 4: Notifications (minutes before event)")
         num_notifications = st.number_input("How many notifications? (0 to 3)", 0, 3, 2)
@@ -325,15 +310,13 @@ def main():
             st.session_state["step"] = 5
         st.stop()
 
-    # Step 5: Create Calendar Events
+    # Step 5
     elif st.session_state["step"] == 5:
         st.header("Step 5: Create Calendar Events")
 
-        # Attempt to get an authenticated service (in case user already came back with ?code=...)
         service = get_google_calendar_service()
         if service:
             st.success("You are authenticated with Google Calendar!")
-            # Proceed to create events
             if st.button("Create Events Now"):
                 cal_id = get_or_create_calendar(service, "Academic Timetable", st.session_state["timezone"])
                 if cal_id:
@@ -347,18 +330,18 @@ def main():
                     )
                     if success:
                         st.success("Calendar events created successfully!")
-                        # As requested, remove the token so next time it forces sign-in again
+                        # Remove token so next time we must re-auth
                         if "google_token" in st.session_state:
                             del st.session_state["google_token"]
                             st.info("Token removed. Next time you'll re-auth.")
             st.stop()
         else:
-            # Not authenticated => show button to open auth in new tab
             st.warning("Not authenticated. Please click below to sign in.")
             if st.button("Sign in with Google in new tab"):
                 auth_url = open_auth_url_in_new_tab()
                 if auth_url:
-                    st.write("**Opened a new tab for Google sign-in.**")
+                    st.write("**If the new tab did not open automatically, please** "
+                             f"[click here to sign in manually]({auth_url})")
             st.stop()
 
 
