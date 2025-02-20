@@ -14,7 +14,7 @@ from google.auth.transport.requests import Request
 # 1) Constants (shared)
 ##########################
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
-REDIRECT_URI = "https://vitaptimetablescheduler.streamlit.app"  # or your domain
+REDIRECT_URI = "https://vitaptimetablescheduler.onrender.com"  # or your domain
 TIMEZONE = "Asia/Kolkata"
 
 # A global weekday_map so day_code -> integer (Mon=0,...,Sun=6)
