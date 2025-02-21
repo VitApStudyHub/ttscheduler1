@@ -291,8 +291,8 @@ def main():
     if st.session_state["step"] == 1:
         st.header("Step 1: Authorize, then Select Batch & Upload/Paste Timetable")
         st.markdown(
-                "How to Use Text Guide, [www.vitaphub.in/guide](https://www.vitaphub.in/guide)"
-            )
+            "How to Use Text Guide, [www.vitaphub.in/guide](https://www.vitaphub.in/guide)"
+        )
 
         # 1) Sign in with Google button FIRST (above batch selection)
         service = get_google_calendar_service()
@@ -316,13 +316,12 @@ def main():
 
         # Based on batch selection, define constraints
         if batch_option == "2024 Batch":
-            # We'll load from mapping1.json
             mapping_file = "mapping1.json"
             st.session_state["SEMESTER_START"] = date(2025, 1, 27)
             st.session_state["SEMESTER_END_STR"] = "20250516T235959Z"
             st.session_state["SKIP_RANGES"] = [
                 (datetime(2025, 2, 24), datetime(2025, 3, 3)),
-                (datetime(2025, 4, 7),  datetime(2025, 4, 15))
+                (datetime(2025, 4, 7), datetime(2025, 4, 15))
             ]
             try:
                 t_map, l_map = load_mappings(mapping_file)
@@ -331,9 +330,7 @@ def main():
             except Exception as e:
                 st.error(f"Could not load {mapping_file}: {e}")
                 st.stop()
-
         else:
-            # All Other Batches
             mapping_file = "mappings.json"
             st.session_state["SEMESTER_START"] = date(2024, 12, 1)
             st.session_state["SEMESTER_END_STR"] = "20250425T235959Z"
@@ -371,10 +368,9 @@ def main():
                     courses = extract_course_details(text)
                     if courses:
                         df = pd.DataFrame(courses)
-                        st.session_state["df"] = df
-                        st.write("### Parsed Data Preview (Don't Edit)")
-                        st.info("To Edit: **Use Download CSV Button Below**, edit it locally, and then reuse via 'Upload CSV' option")
-                        st.warning("Project Courses will not be added, so no need to edit those lines.")
+                        st.write("### Parsed Data Preview (Editable)")
+                        st.info("You can download CSV below if you want to do offline edits, then re-upload.")
+                        st.warning("Project Courses will not be added, so no need to remove them.")
 
                         edited_df = st.data_editor(df, num_rows="dynamic", key="editor")
                         st.session_state["df"] = edited_df
@@ -383,29 +379,28 @@ def main():
                 except Exception as e:
                     st.error(f"Error parsing: {e}")
 
-        # If we have a DF, let's let user Download CSV side-by-side with Next button
+        # If we have a DF, show the Download button (optional), then Next
         if "df" in st.session_state:
-            edited_df = st.session_state["df"]
-            csv_data = edited_df.to_csv(index=False)
-            colA, colB = st.columns([1,1])
-            with colA:
-                if st.button("Next -> Step 2"):
-                    if "google_token" not in st.session_state:
-                        st.error("Please sign in with Google first!")
-                        st.stop()
-                    st.session_state["step"] = 2
-                    st.stop()
-            with colB:
-                st.write(" ")
-                st.download_button(
-                    label="Download CSV",
-                    data=csv_data,
-                    file_name="parsed_timetable.csv",
-                    mime="text/csv"
-                )
+            final_df = st.session_state["df"]
+            csv_data = final_df.to_csv(index=False)
 
+            # Download CSV button (optional)
+            st.download_button(
+                label="Download CSV",
+                data=csv_data,
+                file_name="parsed_timetable.csv",
+                mime="text/csv"
+            )
+
+            # Next -> Step 2 button
+            if st.button("Next -> Step 2"):
+                if "google_token" not in st.session_state:
+                    st.error("Please sign in with Google first!")
+                    st.stop()
+                st.session_state["step"] = 2
+                st.stop()
         else:
-            # If we have no DF yet, just show a Next -> Step 2
+            # If no DF yet, next step won't work properly, but we still show the button
             if st.button("Next -> Step 2"):
                 if "google_token" not in st.session_state:
                     st.error("Please sign in with Google first!")
@@ -419,8 +414,8 @@ def main():
     elif st.session_state["step"] == 2:
         st.header("Step 2: Notifications (minutes before Class)")
         st.markdown(
-                "Notification Settings Text Guide, [www.vitaphub.in/guide](https://www.vitaphub.in/guide)"
-            )
+            "Notification Settings Text Guide, [www.vitaphub.in/guide](https://www.vitaphub.in/guide)"
+        )
 
         with st.form("notif_form"):
             ntimes = []
