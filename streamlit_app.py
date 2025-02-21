@@ -101,7 +101,6 @@ def open_auth_url_in_new_tab():
 def extract_course_details(text):
     """
     Regex-based parser for lines that match the typical VTOP format.
-    (Using the older approach that has been reliable.)
     """
     pattern = re.compile(
         r"(\w+\d+ - [\w\s-]+(?:\s+(?:I|II|III|IV|V|VI|VII|VIII|IX|X))?)\s*\(([\w\s]+)\)\s*"
@@ -160,13 +159,11 @@ def get_first_date_on_or_after(start_date, target_weekday):
 ##########################
 def create_calendar_events(service, df, calendar_id,
                            from_date, until_str,
-                           skip_ranges,  # list of (start_datetime, end_datetime) pairs
+                           skip_ranges,
                            theory_mapping, lab_mapping,
                            notifications=[]):
     """
-    Creates weekly recurring events. We skip *all* days in each skip range,
-    ignoring day-code. Each event is created with a weekly RRULE until `until_str`,
-    plus EXDATE lines for each day in skip_ranges.
+    Creates weekly recurring events, skipping entire date ranges in skip_ranges.
     """
     if not service or not calendar_id:
         return False
@@ -184,6 +181,7 @@ def create_calendar_events(service, df, calendar_id,
         venue = row.get("Venue", "").strip()
         faculty = row.get("Faculty Details", "").strip()
 
+        # Skip certain lines
         if "EMBEDDED PROJECT" in course.upper():
             continue
         if "NIL-ONL" in venue.upper():
@@ -227,7 +225,7 @@ def create_calendar_events(service, df, calendar_id,
             if not day_time_pairs:
                 continue
 
-            # For each (day_code, start_str, end_str)
+            # Build event body for each day/time pair
             for (day_code, start_str, end_str) in day_time_pairs:
                 try:
                     sh, sm = map(int, start_str.split(":"))
@@ -244,6 +242,7 @@ def create_calendar_events(service, df, calendar_id,
 
                 rrule = f"RRULE:FREQ=WEEKLY;BYDAY={day_code};UNTIL={until_str}"
 
+                # EXDATE lines for skip_ranges
                 skip_exdates = []
                 for (skip_start, skip_end) in skip_ranges:
                     day_count = (skip_end - skip_start).days + 1
@@ -294,7 +293,7 @@ def main():
             "How to Use Text Guide, [www.vitaphub.in/guide](https://www.vitaphub.in/guide)"
         )
 
-        # 1) Sign in with Google button FIRST (above batch selection)
+        # 1) Sign in with Google (above batch selection)
         service = get_google_calendar_service()
         if service:
             st.success("You are already authenticated with Google Calendar!")
@@ -305,7 +304,7 @@ def main():
                 if link_html:
                     st.markdown(f"If new tab didn't open, {link_html}", unsafe_allow_html=True)
 
-        # 2) Now do batch selection
+        # 2) Batch selection
         st.subheader("Which batch are you in?")
         batch_option = st.radio(
             "Make Sure Correct Batch is Selected After Refresh:",
@@ -315,7 +314,8 @@ def main():
         st.session_state["batch"] = batch_option
 
         # Based on batch selection, define constraints
-        if batch_option == "2024 Batch":
+        if batch_option == "Only 2024 Batch":
+            # Use mapping1.json
             mapping_file = "mapping1.json"
             st.session_state["SEMESTER_START"] = date(2025, 1, 27)
             st.session_state["SEMESTER_END_STR"] = "20250516T235959Z"
@@ -331,6 +331,7 @@ def main():
                 st.error(f"Could not load {mapping_file}: {e}")
                 st.stop()
         else:
+            # All Other Batches => mappings.json
             mapping_file = "mappings.json"
             st.session_state["SEMESTER_START"] = date(2024, 12, 1)
             st.session_state["SEMESTER_END_STR"] = "20250425T235959Z"
@@ -369,8 +370,8 @@ def main():
                     if courses:
                         df = pd.DataFrame(courses)
                         st.write("### Parsed Data Preview (Editable)")
-                        st.info("You can download CSV below if you want to do offline edits, then re-upload.")
-                        st.warning("Project Courses will not be added, so no need to remove them.")
+                        st.info("Optional: Download CSV below to edit offline, then re-upload if needed.")
+                        st.warning("Project Courses will not be added, so no need to remove them from the table.")
 
                         edited_df = st.data_editor(df, num_rows="dynamic", key="editor")
                         st.session_state["df"] = edited_df
@@ -400,7 +401,7 @@ def main():
                 st.session_state["step"] = 2
                 st.stop()
         else:
-            # If no DF yet, next step won't work properly, but we still show the button
+            # If no DF yet, next step won't work
             if st.button("Next -> Step 2"):
                 if "google_token" not in st.session_state:
                     st.error("Please sign in with Google first!")
