@@ -294,7 +294,6 @@ def main():
                 "How to Use Text Guide, [www.vitaphub.in/guide](https://www.vitaphub.in/guide)"
             )
 
-
         # 1) Sign in with Google button FIRST (above batch selection)
         service = get_google_calendar_service()
         if service:
@@ -388,7 +387,6 @@ def main():
         if "df" in st.session_state:
             edited_df = st.session_state["df"]
             csv_data = edited_df.to_csv(index=False)
-            # Place the Next -> Step 2 button & Download CSV side by side
             colA, colB = st.columns([1,1])
             with colA:
                 if st.button("Next -> Step 2"):
@@ -398,7 +396,7 @@ def main():
                     st.session_state["step"] = 2
                     st.stop()
             with colB:
-                st.write(" ")  # small spacing
+                st.write(" ")
                 st.download_button(
                     label="Download CSV",
                     data=csv_data,
